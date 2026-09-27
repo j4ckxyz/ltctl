@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bunx tsc -p .
+      - run: bun test
+      - name: Commands run
+        run: |
+          bun src/main.ts --version
+          bun src/main.ts --help
+          bun src/main.ts commands --json
+      - name: Docs are up to date
+        if: runner.os == 'Linux'
+        run: |
+          bun run docs
+          git diff --exit-code ../docs/COMMANDS.md
+      - name: Installer syntax
+        if: runner.os == 'Linux'
+        run: sh -n ../install.sh
+      - name: Installer syntax (PowerShell)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("$PWD/../install.ps1", [ref]$null, [ref]$errors) | Out-Null
+          if ($errors) { $errors; exit 1 }

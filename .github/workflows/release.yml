@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - name: Tag matches package.json
+        run: |
+          version="v$(bun -e 'console.log(require("./package.json").version)')"
+          [ "$version" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != package.json $version"; exit 1; }
+      - run: bunx tsc -p .
+      - run: bun test
+      - run: bun run build
+      - run: bun run package
+      - name: Release notes
+        run: |
+          awk -v v="${GITHUB_REF_NAME#v}" '$0 ~ "^## " v {on=1; next} /^## / {on=0} on' ../CHANGELOG.md > notes.md
+          cat notes.md
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" release/* --title "ltctl $GITHUB_REF_NAME" --notes-file notes.md
+
+  verify:
+    name: Install check (${{ matrix.os }})
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install (macOS, Linux)
+        if: runner.os != 'Windows'
+        env:
+          LTCTL_VERSION: ${{ github.ref_name }}
+        run: |
+          sh install.sh
+          ltctl --version
+          ltctl --help
+          ltctl doctor || true
+          ltctl validate - < /dev/null || [ $? -eq 5 ]
+      - name: Install (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          LTCTL_VERSION: ${{ github.ref_name }}
+        run: |
+          ./install.ps1
+          $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
+          ltctl --version
+          ltctl --help
+          ltctl doctor; $global:LASTEXITCODE = 0
