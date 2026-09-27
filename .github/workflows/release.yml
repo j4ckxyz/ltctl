@@ -54,8 +54,9 @@ jobs:
         run: |
           sh install.sh
           ltctl --version
-          ltctl --help
-          ltctl doctor || true
+          ltctl --help > /dev/null
+          ltctl doctor --json | tee doctor.json || true
+          grep -q '"name":"usb","ok":true' doctor.json
           ltctl validate - < /dev/null || [ $? -eq 5 ]
       - name: Install (Windows)
         if: runner.os == 'Windows'
@@ -66,5 +67,10 @@ jobs:
           ./install.ps1
           $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
           ltctl --version
-          ltctl --help
-          ltctl doctor; $global:LASTEXITCODE = 0
+          if ($LASTEXITCODE -ne 0) { throw "ltctl --version failed" }
+          ltctl --help | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "ltctl --help failed" }
+          $report = ltctl doctor --json
+          $report
+          if (-not ($report -match '"name":"usb","ok":true')) { throw "USB access failed" }
+          $global:LASTEXITCODE = 0

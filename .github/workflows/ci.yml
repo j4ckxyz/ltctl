@@ -44,3 +44,58 @@ jobs:
           $errors = $null
           [System.Management.Automation.Language.Parser]::ParseFile("$PWD/../install.ps1", [ref]$null, [ref]$errors) | Out-Null
           if ($errors) { $errors; exit 1 }
+
+  binaries:
+    name: Build release binaries
+    needs: test
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - run: bun run package
+      - uses: actions/upload-artifact@v5
+        with:
+          name: release
+          path: cli/release/
+
+  smoke:
+    name: Run binary (${{ matrix.asset }})
+    needs: binaries
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, asset: ltctl-linux-x64.tar.gz }
+          - { os: ubuntu-24.04-arm, asset: ltctl-linux-arm64.tar.gz }
+          - { os: macos-latest, asset: ltctl-macos-arm64.tar.gz }
+          - { os: windows-latest, asset: ltctl-windows-x64.zip }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: release
+      - name: Unpack
+        run: |
+          case "${{ matrix.asset }}" in
+            *.zip) unzip -o "${{ matrix.asset }}" ;;
+            *) tar -xzf "${{ matrix.asset }}" ;;
+          esac
+      - name: Start, help and USB access
+        run: |
+          exe=./ltctl; [ -f ltctl.exe ] && exe=./ltctl.exe
+          "$exe" --version
+          "$exe" --help > /dev/null
+          "$exe" commands --json > /dev/null
+          report="$("$exe" doctor --json || true)"
+          echo "$report"
+          echo "$report" | grep -q '"name":"usb","ok":true'

@@ -20,7 +20,8 @@ for (const { target, out } of selected) {
   const result = await Bun.build({
     entrypoints: ["src/main.ts"],
     minify: true,
-    bytecode: true,
+    // No bytecode: cross-compiled bytecode crashes Bun 1.3.14's Windows runtime at start-up,
+    // and it saves nothing measurable here (about 21 ms to start either way).
     compile: { target: target as any, outfile: `dist/${out}` },
     plugins: [
       {

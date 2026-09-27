@@ -72,6 +72,9 @@ Update-Path $InstallDir $true
 if (-not (($env:Path -split ";") -contains $InstallDir)) { $env:Path = "$env:Path;$InstallDir" }
 
 $Installed = & (Join-Path $InstallDir "ltctl.exe") --version
+if ($LASTEXITCODE -ne 0 -or -not $Installed) {
+  throw "ltctl was installed to $InstallDir but doesn't run on this computer (exit code $LASTEXITCODE). Please report this at https://github.com/$Repo/issues"
+}
 Write-Host ""
 Write-Host "Installed $Installed to $InstallDir ($($Scope.ToLower()) PATH updated; open a new terminal to use it everywhere)."
 Write-Host ""

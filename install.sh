@@ -122,8 +122,9 @@ if [ "$os" = linux ] && [ -z "${LTCTL_NO_UDEV:-}" ] && [ ! -e "$UDEV_RULE" ]; th
   say "If the amp was already plugged in, unplug it and plug it back in."
 fi
 
+installed="$("$INSTALL_DIR/ltctl" --version)" || fail "ltctl was installed to $INSTALL_DIR but doesn't run on this computer; please report this at https://github.com/$REPO/issues"
 say ""
-say "Installed $("$INSTALL_DIR/ltctl" --version) to $INSTALL_DIR/ltctl"
+say "Installed $installed to $INSTALL_DIR/ltctl"
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;
   *) say "Note: $INSTALL_DIR is not on your PATH; add it, or run $INSTALL_DIR/ltctl." ;;
